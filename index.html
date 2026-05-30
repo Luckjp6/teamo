@@ -1,0 +1,488 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>ArenaPix</title>
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+body {
+  background:#0a0a0f;
+  color:#e0e0ff;
+  font-family:'Segoe UI',sans-serif;
+  overflow:hidden;
+  height:100vh;
+  display:flex; align-items:center; justify-content:center;
+}
+
+/* LOBBY */
+#lobby {
+  display:flex; flex-direction:column; align-items:center; gap:18px; width:340px;
+  padding:20px;
+}
+.logo { font-size:48px; font-weight:900; letter-spacing:4px; color:#fff; text-shadow:0 0 40px #7c3aed; }
+.logo span { color:#22d3ee; text-shadow:0 0 40px #22d3ee; }
+.subtitle { font-size:12px; color:#554488; letter-spacing:4px; text-transform:uppercase; }
+.input-group { display:flex; flex-direction:column; gap:6px; width:100%; }
+.input-group label { font-size:11px; color:#554488; letter-spacing:2px; text-transform:uppercase; }
+input {
+  background:#12102a; border:1px solid #2a2060; border-radius:10px;
+  padding:12px 16px; color:#e0e0ff; font-size:16px; outline:none;
+  transition:border-color .2s; width:100%;
+}
+input:focus { border-color:#7c3aed; }
+.btn {
+  width:100%; background:#7c3aed; color:#fff; border:none; border-radius:10px;
+  padding:14px; font-size:16px; font-weight:700; letter-spacing:2px;
+  cursor:pointer; text-transform:uppercase; transition:all .2s;
+}
+.btn:hover { background:#6d28d9; }
+.btn-sec { background:transparent; border:1px solid #2a2060; color:#7c3aed; font-size:14px; }
+.btn-sec:hover { background:#12102a; }
+.or { color:#332255; font-size:13px; }
+
+/* GAME */
+#game { display:none; position:fixed; inset:0; }
+canvas { display:block; position:absolute; inset:0; }
+
+/* HUD */
+#hud {
+  position:absolute; top:0; left:0; right:0; height:48px;
+  background:#0d0b1ecc; border-bottom:1px solid #1a1540;
+  display:flex; align-items:center; padding:0 16px; gap:16px;
+  backdrop-filter:blur(4px); z-index:10;
+}
+.hud-logo { font-size:15px; font-weight:900; color:#7c3aed; letter-spacing:2px; }
+#hud-room { font-size:12px; color:#554488; }
+#hud-players { font-size:13px; color:#22d3ee; margin-left:auto; }
+#hud-name { font-size:13px; color:#e0e0ff; font-weight:700; }
+
+/* Players list */
+#plist {
+  position:absolute; top:58px; right:12px; z-index:10;
+  background:#0d0b1ecc; border:1px solid #1a1540; border-radius:10px;
+  padding:10px 14px; min-width:140px; backdrop-filter:blur(4px);
+}
+#plist h3 { font-size:10px; color:#554488; letter-spacing:2px; text-transform:uppercase; margin-bottom:8px; }
+.pe { display:flex; align-items:center; gap:8px; margin-bottom:5px; font-size:13px; font-weight:600; }
+.pdot { width:9px; height:9px; border-radius:50%; flex-shrink:0; }
+
+/* Toast */
+#toast {
+  position:absolute; bottom:100px; left:50%; transform:translateX(-50%);
+  background:#1a1540ee; border:1px solid #7c3aed; border-radius:20px;
+  padding:7px 18px; font-size:13px; color:#e0e0ff;
+  pointer-events:none; opacity:0; transition:opacity .3s;
+  white-space:nowrap; z-index:20;
+}
+#toast.show { opacity:1; }
+
+/* Leave btn */
+#btn-leave {
+  position:absolute; bottom:16px; right:16px; z-index:10;
+  background:transparent; border:1px solid #2a2060; border-radius:8px;
+  padding:8px 14px; color:#554488; cursor:pointer; font-size:13px;
+}
+#btn-leave:hover { border-color:#f43f5e; color:#f43f5e; }
+
+/* JOYSTICK (mobile) */
+#joystick-wrap {
+  position:absolute; bottom:40px; left:50px; z-index:20;
+  display:none;
+}
+#joystick-base {
+  width:110px; height:110px; border-radius:50%;
+  background:#ffffff0a; border:2px solid #ffffff22;
+  position:relative; touch-action:none;
+}
+#joystick-knob {
+  width:44px; height:44px; border-radius:50%;
+  background:#7c3aed; box-shadow:0 0 16px #7c3aed;
+  position:absolute;
+  top:50%; left:50%;
+  transform:translate(-50%,-50%);
+  pointer-events:none;
+}
+</style>
+</head>
+<body>
+
+<!-- LOBBY -->
+<div id="lobby">
+  <div class="logo">ARENA<span>PIX</span></div>
+  <div class="subtitle">Multiplayer · Beta</div>
+  <div class="input-group">
+    <label>Seu nome</label>
+    <input id="inp-name" placeholder="Ex: xKillaz99" maxlength="16"/>
+  </div>
+  <div class="input-group">
+    <label>Código da sala</label>
+    <input id="inp-room" placeholder="Ex: arena123" maxlength="20"/>
+  </div>
+  <button class="btn" onclick="joinRoom()">ENTRAR NA SALA</button>
+  <div class="or">— ou —</div>
+  <button class="btn btn-sec" onclick="createRoom()">CRIAR SALA ALEATÓRIA</button>
+  <div id="lobby-err" style="font-size:13px;color:#f43f5e;display:none;"></div>
+</div>
+
+<!-- GAME -->
+<div id="game">
+  <canvas id="gc"></canvas>
+  <div id="hud">
+    <span class="hud-logo">ARENAPIX</span>
+    <span id="hud-room"></span>
+    <span id="hud-name"></span>
+    <span id="hud-players">1 jogador</span>
+  </div>
+  <div id="plist">
+    <h3>Jogadores</h3>
+    <div id="pl-entries"></div>
+  </div>
+  <div id="toast"></div>
+  <button id="btn-leave" onclick="leaveRoom()">Sair</button>
+
+  <!-- Joystick mobile -->
+  <div id="joystick-wrap">
+    <div id="joystick-base">
+      <div id="joystick-knob"></div>
+    </div>
+  </div>
+</div>
+
+<script src="/socket.io/socket.io.js"></script>
+<script>
+// ─── Canvas & ctx ───────────────────────────────────────────
+const gc = document.getElementById('gc');
+const ctx = gc.getContext('2d');
+
+// ─── Map ────────────────────────────────────────────────────
+const MAP_W = 2400, MAP_H = 1800;
+
+// Tiles: 0=grass, 1=dirt path, 2=water, 3=stone
+const TILE = 60;
+const COLS = MAP_W / TILE; // 40
+const ROWS = MAP_H / TILE; // 30
+
+// Build tile map
+const tileMap = [];
+for (let r = 0; r < ROWS; r++) {
+  tileMap[r] = [];
+  for (let c = 0; c < COLS; c++) {
+    // Border water
+    if (r < 2 || r >= ROWS-2 || c < 2 || c >= COLS-2) { tileMap[r][c] = 2; continue; }
+    // Dirt paths (cross shape)
+    if (r === 15 || c === 20) { tileMap[r][c] = 1; continue; }
+    // Stone patches
+    if ((r>=5&&r<=8&&c>=5&&c<=9)||(r>=20&&r<=24&&c>=28&&c<=33)) { tileMap[r][c] = 3; continue; }
+    // More water (lake)
+    if (r>=10&&r<=14&&c>=30&&c<=36) { tileMap[r][c] = 2; continue; }
+    if (r>=18&&r<=22&&c>=8&&c<=13) { tileMap[r][c] = 2; continue; }
+    tileMap[r][c] = 0;
+  }
+}
+
+const TILE_COLORS = ['#1a3a1a','#6b4f2a','#1a2a5a','#3a3a3a'];
+const TILE_BORDER = ['#1e421e','#7a5c32','#1e3268','#444444'];
+
+// Trees (decorative)
+const TREES = [];
+const treeCells = [
+  [3,3],[3,36],[26,3],[26,36],[7,15],[7,25],[22,15],[22,25],
+  [4,10],[4,20],[5,30],[25,10],[24,22],[23,32],[12,4],[12,35],
+  [8,38],[18,2],[10,18],[20,18],[14,28],[16,8],
+];
+for(const [r,c] of treeCells){
+  if(tileMap[r]&&tileMap[r][c]!==2) TREES.push({x:c*TILE+TILE/2,y:r*TILE+TILE/2});
+}
+
+// ─── State ──────────────────────────────────────────────────
+let socket=null, myId=null, myName='', myColor='#22d3ee', currentRoom='';
+let players = {};
+let myX=MAP_W/2, myY=MAP_H/2;
+let cam = {x:0,y:0};
+let keys = {};
+let moveThrottle = 0;
+const SPEED = 180; // px/s
+let lastTime = 0;
+
+// Joystick state
+let joyActive=false, joyStartX=0, joyStartY=0, joyDx=0, joyDy=0;
+
+// ─── Detect mobile ──────────────────────────────────────────
+function isMobile(){ return /Android|iPhone|iPad|iPod|Touch/i.test(navigator.userAgent) || window.innerWidth < 700; }
+
+// ─── Init socket ────────────────────────────────────────────
+function initSocket(){
+  socket = io();
+  socket.on('connect', ()=>{ myId=socket.id; });
+  socket.on('room_state', state=>{
+    players=state;
+    myColor=players[myId]?.color||'#22d3ee';
+    if(players[myId]){ myX=players[myId].x; myY=players[myId].y; }
+    updatePList();
+    showToast(`Você entrou na sala "${currentRoom}"!`);
+  });
+  socket.on('player_joined', p=>{ players[p.id]=p; updatePList(); showToast(`${p.name} entrou!`); });
+  socket.on('player_moved', ({id,x,y})=>{ if(players[id]&&id!==myId){players[id].x=x;players[id].y=y;} });
+  socket.on('player_left', id=>{ const n=players[id]?.name||'Alguém'; delete players[id]; updatePList(); showToast(`${n} saiu.`); });
+}
+
+// ─── Lobby ──────────────────────────────────────────────────
+function joinRoom(){
+  const name=document.getElementById('inp-name').value.trim()||'Player';
+  const room=document.getElementById('inp-room').value.trim();
+  if(!room){ lobbyErr('Digite o código da sala!'); return; }
+  enterGame(name,room);
+}
+function createRoom(){
+  const name=document.getElementById('inp-name').value.trim()||'Player';
+  const room='sala-'+Math.random().toString(36).substr(2,5).toUpperCase();
+  document.getElementById('inp-room').value=room;
+  enterGame(name,room);
+}
+function enterGame(name,room){
+  if(!socket) initSocket();
+  myName=name; currentRoom=room;
+  myX=MAP_W/2; myY=MAP_H/2;
+  document.getElementById('lobby').style.display='none';
+  document.getElementById('game').style.display='block';
+  document.getElementById('hud-room').textContent='📍 '+room;
+  document.getElementById('hud-name').textContent=name;
+  if(isMobile()) document.getElementById('joystick-wrap').style.display='block';
+  resizeCanvas();
+  socket.emit('join_room',{roomId:room,name});
+  lastTime=performance.now();
+  requestAnimationFrame(loop);
+}
+function leaveRoom(){
+  socket?.disconnect(); socket=null; players={};
+  document.getElementById('game').style.display='none';
+  document.getElementById('lobby').style.display='flex';
+  document.getElementById('joystick-wrap').style.display='none';
+}
+
+// ─── Canvas resize ──────────────────────────────────────────
+function resizeCanvas(){
+  gc.width=window.innerWidth;
+  gc.height=window.innerHeight;
+}
+window.addEventListener('resize',resizeCanvas);
+
+// ─── Game loop ──────────────────────────────────────────────
+function loop(ts){
+  const dt=Math.min((ts-lastTime)/1000,0.1);
+  lastTime=ts;
+  if(document.getElementById('game').style.display!=='none'){
+    updateMovement(dt);
+    updateCamera();
+    draw();
+  }
+  requestAnimationFrame(loop);
+}
+
+function updateMovement(dt){
+  let dx=0,dy=0;
+  // WASD / Arrow keys
+  if(keys['a']||keys['A']||keys['ArrowLeft']) dx-=1;
+  if(keys['d']||keys['D']||keys['ArrowRight']) dx+=1;
+  if(keys['w']||keys['W']||keys['ArrowUp']) dy-=1;
+  if(keys['s']||keys['S']||keys['ArrowDown']) dy+=1;
+  // Joystick
+  if(joyActive){ dx+=joyDx; dy+=joyDy; }
+  // Normalize
+  const l=Math.hypot(dx,dy);
+  if(l>0){dx/=l;dy/=l;}
+  // Move
+  myX=Math.max(20,Math.min(MAP_W-20, myX+dx*SPEED*dt));
+  myY=Math.max(20,Math.min(MAP_H-20, myY+dy*SPEED*dt));
+  // Sync
+  if(players[myId]){players[myId].x=myX;players[myId].y=myY;}
+  const now=Date.now();
+  if((dx!==0||dy!==0)&&now-moveThrottle>33&&socket&&currentRoom){
+    moveThrottle=now;
+    socket.emit('move',{roomId:currentRoom,x:myX,y:myY});
+  }
+}
+
+function updateCamera(){
+  const tw=gc.width, th=gc.height;
+  cam.x=myX-tw/2;
+  cam.y=myY-th/2;
+  cam.x=Math.max(0,Math.min(MAP_W-tw,cam.x));
+  cam.y=Math.max(0,Math.min(MAP_H-th,cam.y));
+}
+
+// ─── Draw ───────────────────────────────────────────────────
+function draw(){
+  const W=gc.width,H=gc.height;
+  ctx.clearRect(0,0,W,H);
+  ctx.save();
+  ctx.translate(-cam.x,-cam.y);
+
+  // Tiles
+  const startC=Math.max(0,Math.floor(cam.x/TILE));
+  const endC=Math.min(COLS,Math.ceil((cam.x+W)/TILE));
+  const startR=Math.max(0,Math.floor(cam.y/TILE));
+  const endR=Math.min(ROWS,Math.ceil((cam.y+H)/TILE));
+  for(let r=startR;r<endR;r++){
+    for(let c=startC;c<endC;c++){
+      const t=tileMap[r][c];
+      const tx=c*TILE,ty=r*TILE;
+      ctx.fillStyle=TILE_COLORS[t];
+      ctx.fillRect(tx,ty,TILE,TILE);
+      ctx.strokeStyle=TILE_BORDER[t];
+      ctx.lineWidth=.5;
+      ctx.strokeRect(tx,ty,TILE,TILE);
+      // Water shimmer
+      if(t===2){
+        ctx.fillStyle='#ffffff08';
+        ctx.fillRect(tx+4,ty+4+Math.sin(Date.now()*.002+c+r)*3,TILE-8,4);
+      }
+    }
+  }
+
+  // Trees
+  for(const tr of TREES){
+    if(tr.x<cam.x-60||tr.x>cam.x+W+60||tr.y<cam.y-80||tr.y>cam.y+H+80) continue;
+    // Shadow
+    ctx.save();
+    ctx.globalAlpha=.18;
+    ctx.fillStyle='#000';
+    ctx.beginPath();
+    ctx.ellipse(tr.x+6,tr.y+8,18,8,0,0,Math.PI*2);
+    ctx.fill();
+    ctx.restore();
+    // Trunk
+    ctx.fillStyle='#5a3a1a';
+    ctx.fillRect(tr.x-5,tr.y-4,10,22);
+    // Canopy
+    ctx.save();
+    ctx.shadowColor='#0a2a0a';ctx.shadowBlur=8;
+    ctx.fillStyle='#1a5a1a';
+    ctx.beginPath();ctx.arc(tr.x,tr.y-14,22,0,Math.PI*2);ctx.fill();
+    ctx.fillStyle='#228822';
+    ctx.beginPath();ctx.arc(tr.x-8,tr.y-18,14,0,Math.PI*2);ctx.fill();
+    ctx.fillStyle='#2aaa2a';
+    ctx.beginPath();ctx.arc(tr.x+6,tr.y-20,12,0,Math.PI*2);ctx.fill();
+    ctx.restore();
+  }
+
+  // Players
+  for(const id in players){
+    const p=players[id];
+    drawPlayer(p,id===myId);
+  }
+
+  ctx.restore();
+}
+
+function drawPlayer(p,isMe){
+  const r=16;
+  // Shadow
+  ctx.save();
+  ctx.globalAlpha=.2;
+  ctx.fillStyle='#000';
+  ctx.beginPath();
+  ctx.ellipse(p.x+3,p.y+r+2,r-2,6,0,0,Math.PI*2);
+  ctx.fill();
+  ctx.restore();
+  // Glow ring for self
+  if(isMe){
+    ctx.save();
+    ctx.strokeStyle=p.color;
+    ctx.lineWidth=2;
+    ctx.globalAlpha=.4+Math.sin(Date.now()*.004)*.2;
+    ctx.beginPath();ctx.arc(p.x,p.y,r+8,0,Math.PI*2);ctx.stroke();
+    ctx.restore();
+  }
+  // Body
+  ctx.save();
+  ctx.shadowColor=p.color;ctx.shadowBlur=isMe?18:10;
+  ctx.fillStyle=p.color;
+  ctx.beginPath();ctx.arc(p.x,p.y,r,0,Math.PI*2);ctx.fill();
+  ctx.restore();
+  // Inner highlight
+  ctx.save();
+  ctx.globalAlpha=.4;
+  ctx.fillStyle='#fff';
+  ctx.beginPath();ctx.arc(p.x-5,p.y-5,6,0,Math.PI*2);ctx.fill();
+  ctx.restore();
+  // Name tag
+  ctx.save();
+  ctx.fillStyle='#000a';
+  const tw2=ctx.measureText(p.name).width+12;
+  ctx.beginPath();
+  ctx.roundRect(p.x-tw2/2,p.y-r-26,tw2,18,4);
+  ctx.fill();
+  ctx.fillStyle=isMe?'#fff':p.color;
+  ctx.font=`bold ${isMe?13:12}px Segoe UI`;
+  ctx.textAlign='center';
+  ctx.fillText(p.name,p.x,p.y-r-12);
+  ctx.restore();
+}
+
+// ─── Keyboard ───────────────────────────────────────────────
+window.addEventListener('keydown',e=>{ keys[e.key]=true; if(e.key===' ')e.preventDefault(); });
+window.addEventListener('keyup',e=>{ keys[e.key]=false; });
+
+// ─── Joystick ───────────────────────────────────────────────
+const jBase=document.getElementById('joystick-base');
+const jKnob=document.getElementById('joystick-knob');
+const JR=55; // max radius
+
+function joyStart(e){
+  e.preventDefault();
+  joyActive=true;
+  const t=e.touches?e.touches[0]:e;
+  const rect=jBase.getBoundingClientRect();
+  joyStartX=rect.left+rect.width/2;
+  joyStartY=rect.top+rect.height/2;
+}
+function joyMove(e){
+  e.preventDefault();
+  if(!joyActive) return;
+  const t=e.touches?e.touches[0]:e;
+  let dx=t.clientX-joyStartX, dy=t.clientY-joyStartY;
+  const d=Math.hypot(dx,dy);
+  if(d>JR){dx=dx/d*JR;dy=dy/d*JR;}
+  jKnob.style.transform=`translate(calc(-50% + ${dx}px), calc(-50% + ${dy}px))`;
+  joyDx=dx/JR; joyDy=dy/JR;
+}
+function joyEnd(e){
+  e.preventDefault();
+  joyActive=false; joyDx=0; joyDy=0;
+  jKnob.style.transform='translate(-50%,-50%)';
+}
+jBase.addEventListener('touchstart',joyStart,{passive:false});
+jBase.addEventListener('touchmove',joyMove,{passive:false});
+jBase.addEventListener('touchend',joyEnd,{passive:false});
+
+// ─── UI helpers ─────────────────────────────────────────────
+function updatePList(){
+  const count=Object.keys(players).length;
+  document.getElementById('hud-players').textContent=count+(count===1?' jogador':' jogadores');
+  const el=document.getElementById('pl-entries');
+  el.innerHTML='';
+  for(const id in players){
+    const p=players[id];
+    const d=document.createElement('div');
+    d.className='pe';
+    d.style.color=p.color;
+    d.innerHTML=`<span class="pdot" style="background:${p.color}"></span>${p.name}${id===myId?' (você)':''}`;
+    el.appendChild(d);
+  }
+}
+let toastT=null;
+function showToast(msg){
+  const el=document.getElementById('toast');
+  el.textContent=msg;el.classList.add('show');
+  clearTimeout(toastT);toastT=setTimeout(()=>el.classList.remove('show'),2500);
+}
+function lobbyErr(msg){
+  const el=document.getElementById('lobby-err');
+  el.textContent=msg;el.style.display='block';
+  setTimeout(()=>el.style.display='none',3000);
+}
+</script>
+</body>
+</html>
